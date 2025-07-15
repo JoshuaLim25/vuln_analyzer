@@ -49,7 +49,7 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "CVE Vulnerability Analyzer")
+	http.ServeFile(w, r, "./ui/html/index.html")
 }
 
 func health(w http.ResponseWriter, r *http.Request) {
