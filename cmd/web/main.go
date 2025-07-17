@@ -32,13 +32,27 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nvdService, err := NewNVDService()
-	if err != nil {
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+	var req struct {
+		CVE string `json:"cve"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	cveData, err := nvdService.Fetch("CVE-2023-1234") // Placeholder
+	// Try NVD first
+	nvdService, err := NewNVDService()
+	if err == nil {
+		if cveData, err := nvdService.Fetch(req.CVE); err == nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(cveData)
+			return
+		}
+	}
+
+	// Fallback to OSV
+	osvService := NewOSVService()
+	cveData, err := osvService.Fetch(req.CVE)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
