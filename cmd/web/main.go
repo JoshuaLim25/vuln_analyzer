@@ -47,32 +47,66 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Processing CVE request: %s", req.CVE)
 
+	// Fetch CVE data from sources
+	var cveData *models.CVEData
+	var source string
+
 	// Try NVD first
 	nvdService, err := NewNVDService()
 	if err == nil {
-		if cveData, err := nvdService.Fetch(req.CVE); err == nil {
+		if data, err := nvdService.Fetch(req.CVE); err == nil {
+			cveData = data
+			source = "NVD"
 			log.Printf("Successfully fetched %s from NVD", req.CVE)
-			if err := writeJSON(w, http.StatusOK, cveData); err != nil {
-				log.Printf("Failed to write response: %v", err)
-			}
-			return
 		} else {
 			log.Printf("NVD fetch failed for %s: %v", req.CVE, err)
 		}
 	}
 
-	// Fallback to OSV
-	log.Printf("Trying OSV fallback for %s", req.CVE)
-	osvService := NewOSVService()
-	cveData, err := osvService.Fetch(req.CVE)
+	// Fallback to OSV if NVD failed
+	if cveData == nil {
+		log.Printf("Trying OSV fallback for %s", req.CVE)
+		osvService := NewOSVService()
+		if data, err := osvService.Fetch(req.CVE); err == nil {
+			cveData = data
+			source = "OSV"
+			log.Printf("Successfully fetched %s from OSV", req.CVE)
+		} else {
+			log.Printf("OSV fetch failed for %s: %v", req.CVE, err)
+			writeErrorResponse(w, http.StatusNotFound, fmt.Sprintf("CVE %s not found", req.CVE), req.CVE)
+			return
+		}
+	}
+
+	// Generate AI summary
+	geminiService, err := NewGeminiService()
 	if err != nil {
-		log.Printf("OSV fetch failed for %s: %v", req.CVE, err)
-		writeErrorResponse(w, http.StatusNotFound, fmt.Sprintf("CVE %s not found", req.CVE), req.CVE)
+		log.Printf("Failed to create Gemini service: %v", err)
+		// Return data without AI summary
+		response := map[string]interface{}{
+			"source":  source,
+			"summary": fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)", 
+				cveData.ID, cveData.Description, cveData.Severity, cveData.Score),
+		}
+		if err := writeJSON(w, http.StatusOK, response); err != nil {
+			log.Printf("Failed to write response: %v", err)
+		}
 		return
 	}
 
-	log.Printf("Successfully fetched %s from OSV", req.CVE)
-	if err := writeJSON(w, http.StatusOK, cveData); err != nil {
+	summary, err := geminiService.GenerateSummary(cveData)
+	if err != nil {
+		log.Printf("Failed to generate AI summary: %v", err)
+		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)", 
+			cveData.ID, cveData.Description, cveData.Severity, cveData.Score)
+	}
+
+	response := map[string]interface{}{
+		"source":  source,
+		"summary": summary,
+	}
+
+	if err := writeJSON(w, http.StatusOK, response); err != nil {
 		log.Printf("Failed to write response: %v", err)
 	}
 }

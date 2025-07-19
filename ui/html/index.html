@@ -94,10 +94,8 @@
                 const data = await response.json();
                 resultDiv.innerHTML = `
                     <div class="result">
-                        <h3>${data.id}</h3>
-                        <p><strong>Severity:</strong> ${data.severity} (${data.score})</p>
-                        <p><strong>Description:</strong> ${data.description}</p>
-                        <p><strong>Published:</strong> ${data.published}</p>
+                        <p><strong>Source:</strong> ${data.source}</p>
+                        <div style="margin-top: 15px;">${data.summary}</div>
                     </div>
                 `;
             } catch (error) {
