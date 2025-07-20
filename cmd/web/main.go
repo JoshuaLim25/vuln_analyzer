@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 )
 
 func main() {
@@ -45,8 +47,17 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate CVE format
 	if req.CVE == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "CVE ID is required", "")
+		return
+	}
+	
+	// Normalize and validate CVE format
+	req.CVE = strings.ToUpper(strings.TrimSpace(req.CVE))
+	cveRegex := regexp.MustCompile(`^CVE-\d{4}-\d{4,}$`)
+	if !cveRegex.MatchString(req.CVE) {
+		writeErrorResponse(w, http.StatusBadRequest, "Invalid CVE format (expected CVE-YYYY-NNNN)", req.CVE)
 		return
 	}
 
