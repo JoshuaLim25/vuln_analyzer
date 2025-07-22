@@ -3,37 +3,28 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+
+	"vuln_analyzer/internal/models"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "5000"
-	}
-
-	mux := http.NewServeMux()
-	// Static files
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
-	
-	// Routes
-	mux.HandleFunc("/", home)
-	mux.HandleFunc("/api/health", health)
-	mux.HandleFunc("/api/cve", handleCVE)
-
-	log.Printf("Starting server on port %s", port)
-	err := http.ListenAndServe(":"+port, mux)
-	if err != nil {
-		log.Fatal(err)
+	if err := run(); err != nil {
+		slog.Error("Server failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 }
 
-func handleCVE(w http.ResponseWriter, r *http.Request) {
+func run() error {
+	server := newServer()
+	return server.run()
+}
+
+func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed", "")
 		return
@@ -61,7 +52,8 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Processing CVE request: %s", req.CVE)
+	logger := s.logger.WithCVE(req.CVE)
+	logger.Info("Processing CVE request")
 
 	// Fetch CVE data from sources
 	var cveData *models.CVEData
@@ -73,22 +65,22 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 		if data, err := nvdService.Fetch(req.CVE); err == nil {
 			cveData = data
 			source = "NVD"
-			log.Printf("Successfully fetched %s from NVD", req.CVE)
+			logger.Info("Successfully fetched from NVD")
 		} else {
-			log.Printf("NVD fetch failed for %s: %v", req.CVE, err)
+			logger.Warn("NVD fetch failed", slog.String("error", err.Error()))
 		}
 	}
 
 	// Fallback to OSV if NVD failed
 	if cveData == nil {
-		log.Printf("Trying OSV fallback for %s", req.CVE)
+		logger.Info("Trying OSV fallback")
 		osvService := NewOSVService()
 		if data, err := osvService.Fetch(req.CVE); err == nil {
 			cveData = data
 			source = "OSV"
-			log.Printf("Successfully fetched %s from OSV", req.CVE)
+			logger.Info("Successfully fetched from OSV")
 		} else {
-			log.Printf("OSV fetch failed for %s: %v", req.CVE, err)
+			logger.Error("OSV fetch failed", slog.String("error", err.Error()))
 			writeErrorResponse(w, http.StatusNotFound, fmt.Sprintf("CVE %s not found", req.CVE), req.CVE)
 			return
 		}
@@ -97,7 +89,7 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 	// Generate AI summary
 	geminiService, err := NewGeminiService()
 	if err != nil {
-		log.Printf("Failed to create Gemini service: %v", err)
+		logger.Warn("Failed to create Gemini service", slog.String("error", err.Error()))
 		// Return data without AI summary
 		response := map[string]interface{}{
 			"source":  source,
@@ -105,14 +97,14 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 				cveData.ID, cveData.Description, cveData.Severity, cveData.Score),
 		}
 		if err := writeJSON(w, http.StatusOK, response); err != nil {
-			log.Printf("Failed to write response: %v", err)
+			logger.Error("Failed to write response", slog.String("error", err.Error()))
 		}
 		return
 	}
 
 	summary, err := geminiService.GenerateSummary(cveData)
 	if err != nil {
-		log.Printf("Failed to generate AI summary: %v", err)
+		logger.Warn("Failed to generate AI summary", slog.String("error", err.Error()))
 		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)", 
 			cveData.ID, cveData.Description, cveData.Severity, cveData.Score)
 	}
@@ -122,16 +114,18 @@ func handleCVE(w http.ResponseWriter, r *http.Request) {
 		"summary": summary,
 	}
 
+	logger.Info("Successfully processed CVE request", slog.String("source", source))
+
 	if err := writeJSON(w, http.StatusOK, response); err != nil {
-		log.Printf("Failed to write response: %v", err)
+		logger.Error("Failed to write response", slog.String("error", err.Error()))
 	}
 }
 
-func home(w http.ResponseWriter, r *http.Request) {
+func (s *server) home(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "./ui/html/index.html")
 }
 
-func health(w http.ResponseWriter, r *http.Request) {
+func (s *server) health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, `{"status":"healthy"}`)
 }
