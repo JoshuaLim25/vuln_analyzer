@@ -86,15 +86,26 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate AI summary
+	// Perform web search
+	webSearchService := NewWebSearchService()
+	webResult, err := webSearchService.Search(r.Context(), req.CVE)
+	var webContent string
+	if err != nil {
+		logger.Warn("Web search failed", slog.String("error", err.Error()))
+		webContent = "**Web Search Status:** Unable to retrieve additional web context."
+	} else {
+		webContent = webResult.Content
+	}
+
+	// Generate AI summary with web context
 	geminiService, err := NewGeminiService()
 	if err != nil {
 		logger.Warn("Failed to create Gemini service", slog.String("error", err.Error()))
 		// Return data without AI summary
 		response := map[string]interface{}{
 			"source":  source,
-			"summary": fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)", 
-				cveData.ID, cveData.Description, cveData.Severity, cveData.Score),
+			"summary": fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)\n\n%s", 
+				cveData.ID, cveData.Description, cveData.Severity, cveData.Score, webContent),
 		}
 		if err := writeJSON(w, http.StatusOK, response); err != nil {
 			logger.Error("Failed to write response", slog.String("error", err.Error()))
@@ -105,8 +116,8 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	summary, err := geminiService.GenerateSummary(cveData)
 	if err != nil {
 		logger.Warn("Failed to generate AI summary", slog.String("error", err.Error()))
-		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)", 
-			cveData.ID, cveData.Description, cveData.Severity, cveData.Score)
+		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)\n\n%s", 
+			cveData.ID, cveData.Description, cveData.Severity, cveData.Score, webContent)
 	}
 
 	response := map[string]interface{}{
