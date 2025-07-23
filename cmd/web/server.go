@@ -80,7 +80,7 @@ func (s *server) run() error {
 	return nil
 }
 
-func (s *server) routes() *http.ServeMux {
+func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	
 	// Static files
@@ -92,5 +92,10 @@ func (s *server) routes() *http.ServeMux {
 	mux.HandleFunc("/api/health", s.health)
 	mux.HandleFunc("/api/cve", s.handleCVE)
 
-	return mux
+	// Add middleware
+	handler := RequestID(mux)
+	handler = Recovery(s.logger.Logger)(handler)
+	handler = Security(handler)
+
+	return handler
 }
