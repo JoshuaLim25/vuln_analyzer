@@ -20,7 +20,10 @@ func main() {
 }
 
 func run() error {
-	server := newServer()
+	server, err := newServer()
+	if err != nil {
+		return fmt.Errorf("failed to create server: %w", err)
+	}
 	return server.run()
 }
 
@@ -60,35 +63,30 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	var source string
 
 	// Try NVD first
-	nvdService, err := NewNVDService()
-	if err == nil {
-		if data, err := nvdService.Fetch(req.CVE); err == nil {
-			cveData = data
-			source = "NVD"
-			logger.Info("Successfully fetched from NVD")
-		} else {
-			logger.Warn("NVD fetch failed", slog.String("error", err.Error()))
-		}
+	if data, err := s.nvdService.Fetch(req.CVE); err != nil {
+		logger.Warn("NVD fetch failed", slog.String("error", err.Error()))
+	} else {
+		cveData = data
+		source = "NVD"
+		logger.Info("Successfully fetched from NVD")
 	}
 
 	// Fallback to OSV if NVD failed
 	if cveData == nil {
 		logger.Info("Trying OSV fallback")
-		osvService := NewOSVService()
-		if data, err := osvService.Fetch(req.CVE); err == nil {
-			cveData = data
-			source = "OSV"
-			logger.Info("Successfully fetched from OSV")
-		} else {
+		if data, err := s.osvService.Fetch(req.CVE); err != nil {
 			logger.Error("OSV fetch failed", slog.String("error", err.Error()))
 			writeErrorResponse(w, http.StatusNotFound, fmt.Sprintf("CVE %s not found", req.CVE), req.CVE)
 			return
+		} else {
+			cveData = data
+			source = "OSV"
+			logger.Info("Successfully fetched from OSV")
 		}
 	}
 
 	// Perform web search
-	webSearchService := NewWebSearchService()
-	webResult, err := webSearchService.Search(r.Context(), req.CVE)
+	webResult, err := s.webSearchService.Search(r.Context(), req.CVE)
 	var webContent string
 	if err != nil {
 		logger.Warn("Web search failed", slog.String("error", err.Error()))
@@ -98,22 +96,7 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate AI summary with web context
-	geminiService, err := NewGeminiService()
-	if err != nil {
-		logger.Warn("Failed to create Gemini service", slog.String("error", err.Error()))
-		// Return data without AI summary
-		response := map[string]interface{}{
-			"source":  source,
-			"summary": fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)\n\n%s", 
-				cveData.ID, cveData.Description, cveData.Severity, cveData.Score, webContent),
-		}
-		if err := writeJSON(w, http.StatusOK, response); err != nil {
-			logger.Error("Failed to write response", slog.String("error", err.Error()))
-		}
-		return
-	}
-
-	summary, err := geminiService.GenerateSummary(cveData)
+	summary, err := s.geminiService.GenerateSummary(cveData)
 	if err != nil {
 		logger.Warn("Failed to generate AI summary", slog.String("error", err.Error()))
 		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)\n\n%s", 

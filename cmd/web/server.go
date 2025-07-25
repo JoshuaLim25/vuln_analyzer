@@ -10,17 +10,42 @@ import (
 	"syscall"
 	"time"
 
+	"vuln_analyzer/internal/cve"
 	"vuln_analyzer/internal/logger"
 )
 
 type server struct {
-	logger *logger.Logger
+	nvdService       cve.Fetcher
+	osvService       cve.Fetcher
+	geminiService    cve.AIAnalyzer
+	webSearchService cve.WebSearcher
+	logger           *logger.Logger
 }
 
-func newServer() *server {
-	return &server{
-		logger: logger.New(),
+func newServer() (*server, error) {
+	log := logger.New()
+
+	nvdService, err := NewNVDService()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NVD service: %w", err)
 	}
+
+	osvService := NewOSVService()
+
+	geminiService, err := NewGeminiService()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Gemini service: %w", err)
+	}
+
+	webSearchService := NewWebSearchService()
+
+	return &server{
+		nvdService:       nvdService,
+		osvService:       osvService,
+		geminiService:    geminiService,
+		webSearchService: webSearchService,
+		logger:           log,
+	}, nil
 }
 
 func (s *server) run() error {
