@@ -13,7 +13,7 @@ type Fetcher interface {
 }
 
 type AIAnalyzer interface {
-	GenerateSummary(cveData *models.CVEData) (string, error)
+	GenerateSummary(cveData *models.CVEData, webResults string) (string, error)
 }
 
 type WebSearcher interface {

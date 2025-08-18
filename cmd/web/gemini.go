@@ -32,32 +32,44 @@ func NewGeminiService() (*GeminiService, error) {
 	return &GeminiService{client: model}, nil
 }
 
-func (s *GeminiService) GenerateSummary(cveData *models.CVEData) (string, error) {
+func (s *GeminiService) GenerateSummary(cveData *models.CVEData, webResults string) (string, error) {
 	prompt := genai.Text(fmt.Sprintf(`
-		You are a security analyst. Create a clear, specific summary of this vulnerability:
+		You are a security analyst specializing in vulnerability analysis. Create a clear, specific summary using ALL available information from multiple sources.
 
-		**CVE Information:**
+		**CRITICAL: Use all available information to create the most comprehensive analysis possible. The CVE data may come from multiple official databases (NVD, OSV) and web search results may include GitHub Security Advisories plus search engine results. Synthesize all this information for a complete picture.**
+
+		**CVE Database Information:**
 		- **ID:** %s
 		- **Description:** %s  
 		- **Severity:** %s (CVSS Score: %.1f)
+		- **Data Sources:** This CVE information has been aggregated from multiple official vulnerability databases (NVD, OSV) to provide the most complete picture.
+
+		**Additional Context from Web Search (GitHub + Search Engines):**
+		%s
 
 		**Required Response Format:**
 		Use these exact markdown headers:
 
 		### What Happened
-		Explain the core vulnerability in 1-2 sentences. Include affected software/systems if known.
+		FIRST: If this is a well-known vulnerability with a common name (e.g., WannaCry, EternalBlue), state it clearly. Then explain the core vulnerability in 1-2 sentences. Include affected software/systems if known from web results.
 
 		### How It Happened  
-		Explain the technical root cause (buffer overflow, injection, etc.). Describe the attack vector.
+		Explain the technical root cause (buffer overflow, deserialization, etc.). Describe the attack vector/method. Use specific details from web search results when available.
 
 		### Why You Should Care
-		State the direct impact (what attackers can achieve). Include severity context with CVSS score.
+		State the direct impact (what attackers can achieve). Include any notable real-world exploitation mentioned in web results. Provide severity context with CVSS score. ONLY include action items if they are specific (e.g., "update WinRAR to version X").
+
+		### Sources
+		- List any URLs from the web search results that provided information
+		- Only include if web search results contain URLs
 
 		**Quality Requirements:**
-		- Be specific when information is available
+		- If web search results contain specific information, prioritize them over generic CVE descriptions
+		- If only CVE database information is available, extract maximum useful details from it
+		- Be specific when information is available, acknowledge limitations when it isn't
 		- Connect the vulnerability to its real-world significance when possible
-		- Keep each section concise but informative
-	`, cveData.ID, cveData.Description, cveData.Severity, cveData.Score))
+		- Never refuse to provide analysis due to limited information - work with what's available
+	`, cveData.ID, cveData.Description, cveData.Severity, cveData.Score, webResults))
 
 	ctx := context.Background()
 	resp, err := s.client.GenerateContent(ctx, prompt)

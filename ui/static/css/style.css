@@ -172,6 +172,7 @@ body {
     color: var(--accent-green);
 }
 
+
 /* Loading */
 .loading {
     display: flex;

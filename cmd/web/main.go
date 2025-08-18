@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -96,7 +95,7 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate AI summary with web context
-	summary, err := s.geminiService.GenerateSummary(cveData)
+	summary, err := s.geminiService.GenerateSummary(cveData, webContent)
 	if err != nil {
 		logger.Warn("Failed to generate AI summary", slog.String("error", err.Error()))
 		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)\n\n%s", 
@@ -123,3 +122,4 @@ func (s *server) health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, `{"status":"healthy"}`)
 }
+

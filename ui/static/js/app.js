@@ -94,15 +94,34 @@ class CVEAnalyzer {
     
     formatSummary(summary) {
         // Convert markdown-like formatting to HTML
-        return summary
+        let html = summary
+            // First handle headers
             .replace(/### (.+)/g, '<h3>$1</h3>')
+            // Handle bold text
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n\n/g, '</p><p>')
-            .replace(/^/, '<p>')
-            .replace(/$/, '</p>')
-            .replace(/<p><h3>/g, '<h3>')
-            .replace(/<\/h3><\/p>/g, '</h3>')
-            .replace(/<p><\/p>/g, '');
+            // Handle markdown links - must be before paragraph processing
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+            // Split into lines and process
+            .split('\n');
+        
+        // Process each line
+        let result = [];
+        for (let line of html) {
+            line = line.trim();
+            if (line === '') {
+                continue; // Skip empty lines
+            } else if (line.startsWith('<h3>')) {
+                result.push(line);
+            } else if (line.startsWith('- ')) {
+                // Handle list items
+                result.push('<p>• ' + line.substring(2) + '</p>');
+            } else {
+                // Regular paragraph
+                result.push('<p>' + line + '</p>');
+            }
+        }
+        
+        return result.join('');
     }
 }
 
