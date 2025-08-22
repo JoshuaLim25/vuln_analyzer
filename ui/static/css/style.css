@@ -72,6 +72,7 @@ body {
     display: flex;
     gap: 1rem;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .cve-input {
@@ -103,6 +104,10 @@ body {
     cursor: pointer;
     transition: all 0.2s ease;
     min-width: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
 }
 
 .search-btn:hover:not(:disabled) {
@@ -172,6 +177,10 @@ body {
     color: var(--accent-green);
 }
 
+.summary-content a {
+    color: #99c3ff;
+}
+
 
 /* Loading */
 .loading {
@@ -181,6 +190,22 @@ body {
     gap: 0.5rem;
     padding: 2rem;
     color: var(--text-secondary);
+}
+
+.loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top: 2px solid #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: none;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.loading-spinner.show {
+    display: block;
 }
 
 .spinner {

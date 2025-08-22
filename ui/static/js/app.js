@@ -5,6 +5,7 @@ class CVEAnalyzer {
         this.input = document.getElementById('cveInput');
         this.submitBtn = document.getElementById('submitBtn');
         this.resultContainer = document.getElementById('resultContainer');
+        this.loadingSpinner = document.getElementById('loadingSpinner');
         
         this.initEventListeners();
     }
@@ -55,9 +56,11 @@ class CVEAnalyzer {
     
     setLoading(isLoading) {
         this.submitBtn.disabled = isLoading;
-        this.submitBtn.innerHTML = isLoading 
-            ? '<div class="spinner"></div> Analyzing...'
-            : 'Analyze CVE';
+        if (isLoading) {
+            this.loadingSpinner.classList.add('show');
+        } else {
+            this.loadingSpinner.classList.remove('show');
+        }
     }
     
     clearResults() {
