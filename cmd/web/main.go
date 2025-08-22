@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"regexp"
-	"strings"
 
 	"vuln_analyzer/internal/models"
 )
@@ -19,40 +17,32 @@ func main() {
 }
 
 func run() error {
-	server, err := newServer()
+	server, err := NewServer()
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
-	return server.run()
+	return server.Run()
 }
 
-func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed", "")
+		WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed", "")
 		return
 	}
 
-	var req struct {
-		CVE string `json:"cve"`
-	}
-	if err := readJSON(r, &req); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "Invalid request body", "")
+	var req models.CVERequest
+	if err := ReadJSON(r, &req); err != nil {
+		WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body", "")
 		return
 	}
 
-	// Validate CVE format
-	if req.CVE == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "CVE ID is required", "")
+	// Validate and normalize CVE ID
+	cveID, err := models.ValidateCVEID(req.CVE)
+	if err != nil {
+		WriteErrorResponse(w, http.StatusBadRequest, err.Error(), req.CVE)
 		return
 	}
-	
-	// Normalize and validate CVE format
-	req.CVE = strings.ToUpper(strings.TrimSpace(req.CVE))
-	cveRegex := regexp.MustCompile(`^CVE-\d{4}-\d{4,}$`)
-	if !cveRegex.MatchString(req.CVE) {
-		writeErrorResponse(w, http.StatusBadRequest, "Invalid CVE format (expected CVE-YYYY-NNNN)", req.CVE)
-		return
-	}
+	req.CVE = cveID
 
 	logger := s.logger.WithCVE(req.CVE)
 	logger.Info("Processing CVE request")
@@ -61,8 +51,10 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	var cveData *models.CVEData
 	var source string
 
+	ctx := r.Context()
+
 	// Try NVD first
-	if data, err := s.nvdService.Fetch(req.CVE); err != nil {
+	if data, err := s.nvdService.Fetch(ctx, req.CVE); err != nil {
 		logger.Warn("NVD fetch failed", slog.String("error", err.Error()))
 	} else {
 		cveData = data
@@ -73,9 +65,9 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	// Fallback to OSV if NVD failed
 	if cveData == nil {
 		logger.Info("Trying OSV fallback")
-		if data, err := s.osvService.Fetch(req.CVE); err != nil {
+		if data, err := s.osvService.Fetch(ctx, req.CVE); err != nil {
 			logger.Error("OSV fetch failed", slog.String("error", err.Error()))
-			writeErrorResponse(w, http.StatusNotFound, fmt.Sprintf("CVE %s not found", req.CVE), req.CVE)
+			WriteErrorResponse(w, http.StatusNotFound, fmt.Sprintf("CVE %s not found", req.CVE), req.CVE)
 			return
 		} else {
 			cveData = data
@@ -85,7 +77,7 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Perform web search
-	webResult, err := s.webSearchService.Search(r.Context(), req.CVE)
+	webResult, err := s.searchService.Search(ctx, req.CVE)
 	var webContent string
 	if err != nil {
 		logger.Warn("Web search failed", slog.String("error", err.Error()))
@@ -95,10 +87,10 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate AI summary with web context
-	summary, err := s.geminiService.GenerateSummary(cveData, webContent)
+	summary, err := s.aiService.AnalyzeCVE(ctx, cveData, webContent)
 	if err != nil {
 		logger.Warn("Failed to generate AI summary", slog.String("error", err.Error()))
-		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)\n\n%s", 
+		summary = fmt.Sprintf("**CVE:** %s\n\n**Description:** %s\n\n**Severity:** %s (%.1f)\n\n%s",
 			cveData.ID, cveData.Description, cveData.Severity, cveData.Score, webContent)
 	}
 
@@ -109,17 +101,16 @@ func (s *server) handleCVE(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("Successfully processed CVE request", slog.String("source", source))
 
-	if err := writeJSON(w, http.StatusOK, response); err != nil {
+	if err := WriteJSON(w, http.StatusOK, response); err != nil {
 		logger.Error("Failed to write response", slog.String("error", err.Error()))
 	}
 }
 
-func (s *server) home(w http.ResponseWriter, r *http.Request) {
+func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "./ui/html/index.html")
 }
 
-func (s *server) health(w http.ResponseWriter, r *http.Request) {
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, `{"status":"healthy"}`)
 }
-

@@ -1,22 +1,29 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"vuln_analyzer/internal/errors"
 	"vuln_analyzer/internal/models"
 )
 
+const (
+	NVDAPIURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+)
+
+// NVDService provides CVE data fetching from the National Vulnerability Database.
 type NVDService struct {
 	apiKey string
 	client *http.Client
 }
 
+// NewNVDService creates a new NVD service instance.
+// Requires NVD_API_KEY environment variable to be set.
 func NewNVDService() (*NVDService, error) {
 	apiKey := os.Getenv("NVD_API_KEY")
 	if apiKey == "" {
@@ -25,20 +32,21 @@ func NewNVDService() (*NVDService, error) {
 
 	return &NVDService{
 		apiKey: apiKey,
-		client: &http.Client{Timeout: 30 * time.Second},
+		client: &http.Client{Timeout: HTTPTimeout},
 	}, nil
 }
 
-func (s *NVDService) Fetch(cveID string) (*models.CVEData, error) {
-	url := fmt.Sprintf("https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=%s", cveID)
+// Fetch retrieves CVE data from the NVD API.
+func (s *NVDService) Fetch(ctx context.Context, cveID string) (*models.CVEData, error) {
+	url := fmt.Sprintf("%s?cveId=%s", NVDAPIURL, cveID)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, errors.NewServiceError(err, "NVD", cveID)
 	}
 
 	req.Header.Set("apiKey", s.apiKey)
-	req.Header.Set("User-Agent", "CVE-Analyzer/1.0")
+	req.Header.Set("User-Agent", UserAgent)
 
 	resp, err := s.client.Do(req)
 	if err != nil {

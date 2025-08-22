@@ -1,11 +1,19 @@
+// Package models defines the core data structures for CVE information.
 package models
 
-// CVERequest is the structure for the CVE request.
+import (
+	"regexp"
+	"strings"
+
+	"vuln_analyzer/internal/errors"
+)
+
+// CVERequest represents a request for CVE information.
 type CVERequest struct {
 	CVE string `json:"cve"`
 }
 
-// CVEData is the generic CVE structure used throughout the application.
+// CVEData represents normalized CVE information from various sources.
 type CVEData struct {
 	ID          string   `json:"id"`
 	Description string   `json:"description"`
@@ -14,6 +22,23 @@ type CVEData struct {
 	References  []string `json:"references"`
 	Published   string   `json:"published"`
 	Modified    string   `json:"modified"`
+}
+
+// CVEIDRegex matches valid CVE ID format (CVE-YYYY-NNNN)
+var CVEIDRegex = regexp.MustCompile(`^CVE-\d{4}-\d{4,}$`)
+
+// ValidateCVEID validates and normalizes a CVE ID.
+func ValidateCVEID(cveID string) (string, error) {
+	if cveID == "" {
+		return "", errors.ErrEmptyCVEID
+	}
+
+	normalized := strings.ToUpper(strings.TrimSpace(cveID))
+	if !CVEIDRegex.MatchString(normalized) {
+		return "", errors.ErrInvalidCVEID
+	}
+
+	return normalized, nil
 }
 
 // NVDResponse is the structure for the NVD API response.

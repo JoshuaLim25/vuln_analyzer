@@ -26,7 +26,7 @@ func New() *Logger {
 
 	format := os.Getenv("LOG_FORMAT")
 	var handler slog.Handler
-	
+
 	opts := &slog.HandlerOptions{
 		Level: level,
 	}

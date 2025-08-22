@@ -5,16 +5,19 @@ import (
 	"fmt"
 	"os"
 
-	"vuln_analyzer/internal/models"
 	"github.com/google/generative-ai-go/genai"
-	
+	"vuln_analyzer/internal/models"
+
 	"google.golang.org/api/option"
 )
 
+// GeminiService provides AI-powered CVE analysis using Google's Gemini API.
 type GeminiService struct {
 	client *genai.GenerativeModel
 }
 
+// NewGeminiService creates a new Gemini service instance.
+// Requires GEMINI_API_KEY environment variable to be set.
 func NewGeminiService() (*GeminiService, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
@@ -32,7 +35,8 @@ func NewGeminiService() (*GeminiService, error) {
 	return &GeminiService{client: model}, nil
 }
 
-func (s *GeminiService) GenerateSummary(cveData *models.CVEData, webResults string) (string, error) {
+// AnalyzeCVE generates a comprehensive CVE analysis using AI.
+func (s *GeminiService) AnalyzeCVE(ctx context.Context, cveData *models.CVEData, webResults string) (string, error) {
 	prompt := genai.Text(fmt.Sprintf(`
 		You are a security analyst specializing in vulnerability analysis. Create a clear, specific summary using ALL available information from multiple sources.
 
@@ -71,7 +75,6 @@ func (s *GeminiService) GenerateSummary(cveData *models.CVEData, webResults stri
 		- Never refuse to provide analysis due to limited information - work with what's available
 	`, cveData.ID, cveData.Description, cveData.Severity, cveData.Score, webResults))
 
-	ctx := context.Background()
 	resp, err := s.client.GenerateContent(ctx, prompt)
 	if err != nil {
 		return "", fmt.Errorf("error during content generation: %w", err)

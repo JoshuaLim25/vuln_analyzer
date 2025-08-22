@@ -9,11 +9,11 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	"vuln_analyzer/internal/cve"
 )
 
+// WebSearchService provides web search capabilities for CVE-related information.
 type WebSearchService struct {
 	client *http.Client
 }
@@ -24,9 +24,10 @@ type searchResult struct {
 	url     string
 }
 
+// NewWebSearchService creates a new web search service instance.
 func NewWebSearchService() *WebSearchService {
 	return &WebSearchService{
-		client: &http.Client{Timeout: 30 * time.Second},
+		client: &http.Client{Timeout: HTTPTimeout},
 	}
 }
 
@@ -63,7 +64,7 @@ func (s *WebSearchService) Search(ctx context.Context, cveID string) (*cve.Searc
 			lastErr = err
 			continue
 		}
-		
+
 		if len(results) > 0 {
 			sourceStatus[engine.name] = true
 			allResults = append(allResults, results...)
@@ -90,17 +91,17 @@ func (s *WebSearchService) Search(ctx context.Context, cveID string) (*cve.Searc
 
 func (s *WebSearchService) searchGitHubAdvisories(ctx context.Context, cveID string) ([]searchResult, error) {
 	apiURL := fmt.Sprintf("https://api.github.com/advisories?cve_id=%s", cveID)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GitHub request: %w", err)
 	}
 
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "CVE-Analyzer/1.0")
+	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept-Encoding", "identity")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	
+
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("GitHub request failed: %w", err)
@@ -133,13 +134,13 @@ func (s *WebSearchService) searchGitHubAdvisories(ctx context.Context, cveID str
 		if len(results) >= 3 { // Limit results
 			break
 		}
-		
+
 		title := fmt.Sprintf("GitHub Advisory: %s", advisory.Summary)
 		snippet := advisory.Description
 		if len(snippet) > 300 {
 			snippet = snippet[:297] + "..."
 		}
-		
+
 		results = append(results, searchResult{
 			title:   s.cleanText(title),
 			snippet: s.cleanText(snippet),
@@ -161,7 +162,7 @@ func (s *WebSearchService) searchDuckDuckGoResults(ctx context.Context, cveID st
 
 	req.Header.Set("Accept-Encoding", "identity")
 	req.Header.Set("Accept", "application/json")
-	
+
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("DuckDuckGo request failed: %w", err)
@@ -173,9 +174,9 @@ func (s *WebSearchService) searchDuckDuckGoResults(ctx context.Context, cveID st
 	}
 
 	var ddgResp struct {
-		Abstract     string `json:"Abstract"`
-		AbstractText string `json:"AbstractText"`
-		AbstractURL  string `json:"AbstractUrl"`
+		Abstract      string `json:"Abstract"`
+		AbstractText  string `json:"AbstractText"`
+		AbstractURL   string `json:"AbstractUrl"`
 		RelatedTopics []struct {
 			Text string `json:"Text"`
 			URL  string `json:"FirstURL"`
@@ -192,7 +193,7 @@ func (s *WebSearchService) searchDuckDuckGoResults(ctx context.Context, cveID st
 	}
 
 	var results []searchResult
-	
+
 	// Use abstract if available
 	if ddgResp.AbstractText != "" {
 		results = append(results, searchResult{

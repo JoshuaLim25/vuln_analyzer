@@ -16,10 +16,10 @@ func RequestID(next http.Handler) http.Handler {
 		if requestID == "" {
 			requestID = uuid.New().String()
 		}
-		
+
 		ctx := context.WithValue(r.Context(), "request_id", requestID)
 		w.Header().Set("X-Request-ID", requestID)
-		
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -34,11 +34,11 @@ func Recovery(logger *slog.Logger) func(http.Handler) http.Handler {
 						slog.String("error", fmt.Sprintf("%v", err)),
 						slog.String("path", r.URL.Path),
 						slog.String("method", r.Method))
-					
+
 					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				}
 			}()
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -51,7 +51,7 @@ func Security(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		
+
 		next.ServeHTTP(w, r)
 	})
 }

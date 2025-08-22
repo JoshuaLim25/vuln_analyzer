@@ -1,15 +1,27 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"vuln_analyzer/internal/errors"
 	"vuln_analyzer/internal/models"
+)
+
+const (
+	OSVAPIURL = "https://api.osv.dev/v1/vulns"
+)
+
+// CVSS severity levels
+const (
+	SeverityCritical = "CRITICAL"
+	SeverityHigh     = "HIGH"
+	SeverityMedium   = "MEDIUM"
+	SeverityLow      = "LOW"
 )
 
 // OSVResponse is the structure for the OSV API response.
@@ -30,25 +42,28 @@ type OSVResponse struct {
 	Modified  string `json:"modified"`
 }
 
+// OSVService provides CVE data fetching from the Open Source Vulnerabilities database.
 type OSVService struct {
 	client *http.Client
 }
 
+// NewOSVService creates a new OSV service instance.
 func NewOSVService() *OSVService {
 	return &OSVService{
-		client: &http.Client{Timeout: 30 * time.Second},
+		client: &http.Client{Timeout: HTTPTimeout},
 	}
 }
 
-func (s *OSVService) Fetch(cveID string) (*models.CVEData, error) {
-	url := fmt.Sprintf("https://api.osv.dev/v1/vulns/%s", cveID)
+// Fetch retrieves CVE data from the OSV API.
+func (s *OSVService) Fetch(ctx context.Context, cveID string) (*models.CVEData, error) {
+	url := fmt.Sprintf("%s/%s", OSVAPIURL, cveID)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, errors.NewServiceError(err, "OSV", cveID)
 	}
 
-	req.Header.Set("User-Agent", "CVE-Analyzer/1.0")
+	req.Header.Set("User-Agent", UserAgent)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -87,18 +102,11 @@ func (s *OSVService) Fetch(cveID string) (*models.CVEData, error) {
 		cveData.Description = osvResp.Details
 	}
 
-	// Parse severity information
+	// Parse severity information from CVSS scores
 	for _, sev := range osvResp.Severity {
 		if sev.Type == "CVSS_V3" {
-			if strings.Contains(sev.Score, "9.") || strings.Contains(sev.Score, "10.") {
-				cveData.Severity = "CRITICAL"
-			} else if strings.Contains(sev.Score, "7.") || strings.Contains(sev.Score, "8.") {
-				cveData.Severity = "HIGH"
-			} else if strings.Contains(sev.Score, "4.") || strings.Contains(sev.Score, "6.") {
-				cveData.Severity = "MEDIUM"
-			} else {
-				cveData.Severity = "LOW"
-			}
+			cveData.Severity = parseCVSSSeverity(sev.Score)
+			break
 		}
 	}
 
@@ -108,4 +116,18 @@ func (s *OSVService) Fetch(cveID string) (*models.CVEData, error) {
 	}
 
 	return cveData, nil
+}
+
+// parseCVSSSeverity converts CVSS score strings to severity levels.
+func parseCVSSSeverity(score string) string {
+	switch {
+	case strings.Contains(score, "9."), strings.Contains(score, "10."):
+		return SeverityCritical
+	case strings.Contains(score, "7."), strings.Contains(score, "8."):
+		return SeverityHigh
+	case strings.Contains(score, "4."), strings.Contains(score, "5."), strings.Contains(score, "6."):
+		return SeverityMedium
+	default:
+		return SeverityLow
+	}
 }

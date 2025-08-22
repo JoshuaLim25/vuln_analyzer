@@ -28,7 +28,7 @@ func (r *CVERequest) Validate() error {
 
 	// Normalize CVE ID
 	r.CVE = strings.ToUpper(strings.TrimSpace(r.CVE))
-	
+
 	// Validate format
 	if !cveRegex.MatchString(r.CVE) {
 		return fmt.Errorf("invalid CVE ID format: must match CVE-YYYY-NNNN pattern")

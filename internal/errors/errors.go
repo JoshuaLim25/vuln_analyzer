@@ -8,10 +8,11 @@ import (
 
 // Common errors
 var (
-	ErrCVENotFound     = errors.New("CVE not found")
-	ErrInvalidCVEID    = errors.New("invalid CVE ID format")
-	ErrServiceTimeout  = errors.New("service timeout")
-	ErrRateLimited     = errors.New("rate limited")
+	ErrCVENotFound    = errors.New("CVE not found")
+	ErrInvalidCVEID   = errors.New("invalid CVE ID format")
+	ErrEmptyCVEID     = errors.New("CVE ID is required")
+	ErrServiceTimeout = errors.New("service timeout")
+	ErrRateLimited    = errors.New("rate limited")
 )
 
 // AppError represents an application error with additional context.
