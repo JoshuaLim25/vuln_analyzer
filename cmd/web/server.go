@@ -16,7 +16,7 @@ import (
 
 // Server configuration constants
 const (
-	DefaultPort     = "5000"
+	DefaultPort     = "8080"
 	ReadTimeout     = 10 * time.Second
 	WriteTimeout    = 30 * time.Second
 	IdleTimeout     = 60 * time.Second

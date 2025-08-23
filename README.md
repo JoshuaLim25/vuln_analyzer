@@ -21,13 +21,13 @@ A Go web application for analyzing CVE vulnerabilities with AI-powered summaries
 go run ./cmd/web
 ```
 
-Server runs on port 5000 by default. Set `PORT` environment variable to change.
+Server runs on port 8080 by default. Set `PORT` environment variable to change.
 
 ## Environment Variables
 
 - `NVD_API_KEY` - Required: NVD API key for CVE data
 - `GEMINI_API_KEY` - Required: Google Gemini API key for AI summaries
-- `PORT` - Optional: Server port (default: 5000)
+- `PORT` - Optional: Server port (default: 8080)
 - `LOG_LEVEL` - Optional: debug, info, warn, error (default: info)
 - `LOG_FORMAT` - Optional: json, text (default: json)
 
